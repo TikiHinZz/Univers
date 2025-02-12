@@ -1,9 +1,9 @@
 import sqlite3
 import json
 
-class DatabaseManager:
-    """Класс для управления подключением к базе данных и выполнения запросов."""
 
+class DatabaseManager:
+    """Класс для управления подключением к базе данных."""
     def __init__(self, db_name='university.db'):
         self.db_name = db_name
 
@@ -15,6 +15,7 @@ class DatabaseManager:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Закрывает соединение с базой данных."""
+        self.conn.commit()
         self.conn.close()
 
     def execute_query(self, query, params=None):
@@ -23,7 +24,6 @@ class DatabaseManager:
             self.cursor.execute(query, params)
         else:
             self.cursor.execute(query)
-        self.conn.commit()
 
     def fetch_one(self, query, params=None):
         """Возвращает одну строку результата запроса."""
@@ -44,139 +44,152 @@ class DatabaseManager:
 
 class AuditoriumScheduler:
     """Класс для управления аудиториями и их расписанием."""
-
     def __init__(self):
         self.db_manager = DatabaseManager()
 
-    def view_auditoriums(self):
-        """Возвращает список всех аудиторий."""
-        with self.db_manager as db:
-            return db.fetch_all('SELECT * FROM auditoriums')
+    @staticmethod
+    def initialize_database(db_name='university.db'):
+        """Инициализация базы данных и создание необходимых таблиц."""
+        with DatabaseManager(db_name) as db:
+            # Таблица пользователей
+            db.execute_query('''
+                CREATE TABLE IF NOT EXISTS users (
+                    username TEXT PRIMARY KEY,
+                    password TEXT NOT NULL,
+                    role TEXT NOT NULL
+                )
+            ''')
 
-    def add_auditorium(self, auditorium_number):
+            # Таблица аудиторий
+            db.execute_query('''
+                CREATE TABLE IF NOT EXISTS auditoriums (
+                    auditorium_number TEXT PRIMARY KEY,
+                    capacity INTEGER,
+                    equipment TEXT,
+                    auditorium_type TEXT
+                )
+            ''')
+
+            # Таблица бронирований
+            db.execute_query('''
+                CREATE TABLE IF NOT EXISTS bookings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    auditorium_number TEXT,
+                    time_slot TEXT,
+                    event_name TEXT,
+                    booked_by TEXT,
+                    FOREIGN KEY (auditorium_number) REFERENCES auditoriums (auditorium_number),
+                    FOREIGN KEY (booked_by) REFERENCES users (username)
+                )
+            ''')
+
+            # Таблица запросов на оборудование
+            db.execute_query('''
+                CREATE TABLE IF NOT EXISTS equipment_requests (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    auditorium_number TEXT,
+                    equipment TEXT,
+                    requested_by TEXT,
+                    status TEXT DEFAULT 'pending',
+                    FOREIGN KEY (auditorium_number) REFERENCES auditoriums (auditorium_number),
+                    FOREIGN KEY (requested_by) REFERENCES users (username)
+                )
+            ''')
+
+            # Таблица тикетов обратной связи
+            db.execute_query('''
+                CREATE TABLE IF NOT EXISTS feedback_tickets (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    title TEXT,
+                    description TEXT,
+                    created_by TEXT,
+                    status TEXT DEFAULT 'open',
+                    FOREIGN KEY (created_by) REFERENCES users (username)
+                )
+            ''')
+
+    def add_auditorium(self, auditorium_number, capacity, equipment, auditorium_type):
         """Добавляет новую аудиторию."""
         with self.db_manager as db:
             try:
                 db.execute_query(
-                    'INSERT INTO auditoriums (auditorium_number, schedule) VALUES (?, ?)',
-                    (auditorium_number, '[]')
+                    'INSERT INTO auditoriums (auditorium_number, capacity, equipment, auditorium_type) VALUES (?, ?, ?, ?)',
+                    (auditorium_number, capacity, equipment, auditorium_type)
                 )
                 return f"Аудитория {auditorium_number} успешно добавлена."
             except sqlite3.IntegrityError:
                 return f"Аудитория {auditorium_number} уже существует."
 
-    def delete_auditorium(self, auditorium_number):
-        """Удаляет аудиторию."""
+    def view_auditoriums(self):
+        """Просмотр всех аудиторий."""
         with self.db_manager as db:
-            db.execute_query('DELETE FROM auditoriums WHERE auditorium_number = ?', (auditorium_number,))
-            db.execute_query('DELETE FROM teacher_assignments WHERE auditorium_number = ?', (auditorium_number,))
-            if db.cursor.rowcount > 0:
-                return f"Аудитория {auditorium_number} удалена."
-            else:
-                return f"Аудитория {auditorium_number} не найдена."
+            return db.fetch_all('SELECT * FROM auditoriums')
 
-    def book_auditorium(self, auditorium_number, time_slot, event_name):
-        """Бронирует аудиторию на указанное время."""
+    def book_auditorium(self, auditorium_number, time_slot, event_name, booked_by):
+        """Бронирует аудиторию."""
         with self.db_manager as db:
-            result = db.fetch_one('SELECT schedule FROM auditoriums WHERE auditorium_number = ?', (auditorium_number,))
-            if not result:
-                return f"Аудитория {auditorium_number} не найдена."
+            # Проверяем доступность аудитории
+            existing_booking = db.fetch_one(
+                'SELECT * FROM bookings WHERE auditorium_number = ? AND time_slot = ?',
+                (auditorium_number, time_slot)
+            )
+            if existing_booking:
+                return f"Аудитория {auditorium_number} занята в это время ({time_slot})."
 
-            schedule = json.loads(result[0]) if result[0] else []
-            for slot in schedule:
-                if slot["time"] == time_slot:
-                    return f"Аудитория {auditorium_number} занята в это время ({time_slot})."
-
-            schedule.append({"time": time_slot, "event": event_name})
+            # Добавляем бронирование
             db.execute_query(
-                'UPDATE auditoriums SET schedule = ? WHERE auditorium_number = ?',
-                (json.dumps(schedule), auditorium_number)
+                'INSERT INTO bookings (auditorium_number, time_slot, event_name, booked_by) VALUES (?, ?, ?, ?)',
+                (auditorium_number, time_slot, event_name, booked_by)
             )
             return f"Аудитория {auditorium_number} забронирована на {time_slot} для {event_name}."
 
-    def check_availability(self, auditorium_number, time_slot):
-        """Проверяет доступность аудитории на указанное время."""
-        with self.db_manager as db:
-            result = db.fetch_one('SELECT schedule FROM auditoriums WHERE auditorium_number = ?', (auditorium_number,))
-            if not result:
-                return f"Аудитория {auditorium_number} не найдена."
-
-            schedule = json.loads(result[0]) if result[0] else []
-            for slot in schedule:
-                if slot["time"] == time_slot:
-                    return f"Аудитория {auditorium_number} занята в это время ({time_slot})."
-
-            return f"Аудитория {auditorium_number} свободна в это время ({time_slot})."
-
     def cancel_booking(self, auditorium_number, time_slot):
-        """Отменяет бронирование аудитории на указанное время."""
+        """Отменяет бронирование."""
         with self.db_manager as db:
-            result = db.fetch_one('SELECT schedule FROM auditoriums WHERE auditorium_number = ?', (auditorium_number,))
-            if not result:
-                return f"Аудитория {auditorium_number} не найдена."
-
-            schedule = json.loads(result[0]) if result[0] else []
-            updated_schedule = [slot for slot in schedule if slot["time"] != time_slot]
-
-            if len(updated_schedule) == len(schedule):
-                return f"Нет бронирования в аудитории {auditorium_number} на {time_slot}."
-            else:
-                db.execute_query(
-                    'UPDATE auditoriums SET schedule = ? WHERE auditorium_number = ?',
-                    (json.dumps(updated_schedule), auditorium_number)
-                )
-                return f"Бронирование в аудитории {auditorium_number} на {time_slot} отменено."
-
-    def assign_teacher(self, teacher, auditorium_number):
-        """Назначает преподавателя на аудиторию."""
-        with self.db_manager as db:
-            if not db.fetch_one('SELECT * FROM auditoriums WHERE auditorium_number = ?', (auditorium_number,)):
-                return f"Аудитория {auditorium_number} не найдена."
-
-            db.execute_query('DELETE FROM teacher_assignments WHERE teacher = ?', (teacher,))
             db.execute_query(
-                'INSERT INTO teacher_assignments (teacher, auditorium_number) VALUES (?, ?)',
-                (teacher, auditorium_number)
+                'DELETE FROM bookings WHERE auditorium_number = ? AND time_slot = ?',
+                (auditorium_number, time_slot)
             )
-            return f"Преподаватель {teacher} назначен в аудиторию {auditorium_number}."
+            if db.cursor.rowcount > 0:
+                return f"Бронирование в аудитории {auditorium_number} на {time_slot} отменено."
+            else:
+                return f"Нет бронирования в аудитории {auditorium_number} на {time_slot}."
 
-    def get_auditorium_schedule(self, auditorium_number):
-        """Возвращает расписание для указанной аудитории."""
+    def request_equipment(self, auditorium_number, equipment, requested_by):
+        """Отправляет запрос на оборудование."""
         with self.db_manager as db:
-            result = db.fetch_one('SELECT schedule FROM auditoriums WHERE auditorium_number = ?', (auditorium_number,))
-            if not result or not result[0]:
-                return []  # Если расписание пустое
+            db.execute_query(
+                'INSERT INTO equipment_requests (auditorium_number, equipment, requested_by) VALUES (?, ?, ?)',
+                (auditorium_number, equipment, requested_by)
+            )
+            return "Запрос на оборудование отправлен."
 
-            schedule = json.loads(result[0])
-            teacher_name = self.get_teacher_for_auditorium(auditorium_number)
-            return [(slot["time"], slot["event"], teacher_name) for slot in schedule]
-
-    def get_teacher_for_auditorium(self, auditorium_number):
-        """Возвращает преподавателя, назначенного на аудиторию."""
+    def create_feedback_ticket(self, title, description, created_by):
+        """Создает тикет обратной связи."""
         with self.db_manager as db:
-            result = db.fetch_one('SELECT teacher FROM teacher_assignments WHERE auditorium_number = ?', (auditorium_number,))
-            return result[0] if result else None
+            db.execute_query(
+                'INSERT INTO feedback_tickets (title, description, created_by) VALUES (?, ?, ?)',
+                (title, description, created_by)
+            )
+            return "Тикет создан успешно."
 
     def get_auditoriums(self):
         """Возвращает список всех аудиторий."""
         with self.db_manager as db:
             return [row[0] for row in db.fetch_all('SELECT auditorium_number FROM auditoriums')]
 
-    def get_teachers(self):
-        """Возвращает список всех преподавателей."""
+    def find_free_auditoriums(self, time_slot):
+        """Находит свободные аудитории в указанное время."""
         with self.db_manager as db:
-            return [row[0] for row in db.fetch_all('SELECT teacher_name FROM teachers')]
+            all_auditoriums = set(row[0] for row in db.fetch_all('SELECT auditorium_number FROM auditoriums'))
+            booked_auditoriums = set(row[0] for row in db.fetch_all(
+                'SELECT auditorium_number FROM bookings WHERE time_slot = ?', (time_slot,)
+            ))
+            free_auditoriums = all_auditoriums - booked_auditoriums
+            return list(free_auditoriums)
 
     def get_teacher_bookings(self, teacher_name):
-        """Возвращает все бронирования для указанного преподавателя."""
+        """Возвращает все бронирования для преподавателя."""
         with self.db_manager as db:
-            return db.fetch_all('SELECT auditorium_number, time, event FROM bookings WHERE teacher = ?', (teacher_name,))
-
-    def request_equipment(self, auditorium, equipment, teacher_name):
-        """Отправляет запрос на оборудование для аудитории."""
-        with self.db_manager as db:
-            db.execute_query(
-                'INSERT INTO equipment_requests (auditorium_number, equipment, teacher) VALUES (?, ?, ?)',
-                (auditorium, equipment, teacher_name)
-            )
-            return "Запрос на оборудование отправлен."
+            return db.fetch_all('SELECT * FROM bookings WHERE booked_by = ?', (teacher_name,))
+    

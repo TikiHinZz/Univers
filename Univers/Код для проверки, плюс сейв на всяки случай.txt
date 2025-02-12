@@ -1,277 +1,254 @@
-# database.py
+# teacher_app.py
+import tkinter as tk
+from tkinter import messagebox
+from tkinter import ttk
 import sqlite3
-import json
-from database import initialize_database
+from database import AuditoriumScheduler
 
-class AuditoriumScheduler:
-    def __init__(self):
-        self.conn = sqlite3.connect('university.db')
-        self.cursor = self.conn.cursor()
+class DatabaseManager:
+    def __init__(self, db_name='university.db'):
+        self.db_name = db_name
+class TeacherApp:
+    def __init__(self, root, username):
+        self.root = root
+        self.root.title(f"Приложение преподавателя | {username}")
+        self.root.geometry("600x400")
+        self.root.configure(bg="#f0f0f0")
+        self.scheduler = AuditoriumScheduler()
+        self.username = username
 
-    # Просмотр всех аудиторий
-    def view_auditoriums(self):
-        self.cursor.execute('SELECT * FROM auditoriums')
-        return self.cursor.fetchall()
+        # Заголовок
+        tk.Label(
+            self.root,
+            text=f"Добро пожаловать, {username} (Преподаватель)!",
+            bg="#f0f0f0",
+            font=("Arial", 14)
+        ).pack(pady=10)
 
-    # Добавление аудитории
-    def add_auditorium(self, auditorium_number):
-        try:
-            self.cursor.execute('INSERT INTO auditoriums (auditorium_number, schedule) VALUES (?, ?)', 
-                                (auditorium_number, '[]'))
-            self.conn.commit()
-            return f"Аудитория {auditorium_number} успешно добавлена."
-        except sqlite3.IntegrityError:
-            return f"Аудитория {auditorium_number} уже существует."
+        # Кнопки
+        buttons_frame = tk.Frame(self.root, bg="#f0f0f0")
+        buttons_frame.pack(pady=5)
+        tk.Button(
+            buttons_frame,
+            text="Личный кабинет",
+            command=self.personal_cabinet,
+            bg="#4CAF50",
+            fg="white",
+            font=("Arial", 12)
+        ).pack(fill=tk.X, pady=5)
+        tk.Button(
+            buttons_frame,
+            text="Мое расписание",
+            command=self.view_schedule,
+            bg="#4CAF50",
+            fg="white",
+            font=("Arial", 12)
+        ).pack(fill=tk.X, pady=5)
+        tk.Button(
+            buttons_frame,
+            text="Забронировать аудиторию",
+            command=self.book_auditorium,
+            bg="#4CAF50",
+            fg="white",
+            font=("Arial", 12)
+        ).pack(fill=tk.X, pady=5)
+        tk.Button(
+            buttons_frame,
+            text="Управление бронированиями",
+            command=self.manage_bookings,
+            bg="#4CAF50",
+            fg="white",
+            font=("Arial", 12)
+        ).pack(fill=tk.X, pady=5)
+        tk.Button(
+            buttons_frame,
+            text="Запрос оборудования",
+            command=self.request_equipment,
+            bg="#4CAF50",
+            fg="white",
+            font=("Arial", 12)
+        ).pack(fill=tk.X, pady=5)
+        tk.Button(
+            buttons_frame,
+            text="Отчеты",
+            command=self.generate_reports,
+            bg="#4CAF50",
+            fg="white",
+            font=("Arial", 12)
+        ).pack(fill=tk.X, pady=5)
+        tk.Button(
+            buttons_frame,
+            text="Обратная связь",
+            command=self.feedback_system,
+            bg="#4CAF50",
+            fg="white",
+            font=("Arial", 12)
+        ).pack(fill=tk.X, pady=5)
+        tk.Button(
+            buttons_frame,
+            text="Выйти",
+            command=self.logout,
+            bg="#FF5722",
+            fg="white",
+            font=("Arial", 12)
+        ).pack(fill=tk.X, pady=5)
 
-    # Удаление аудитории
-    def delete_auditorium(self, auditorium_number):
-        self.cursor.execute('DELETE FROM auditoriums WHERE auditorium_number = ?', (auditorium_number,))
-        self.cursor.execute('DELETE FROM teacher_assignments WHERE auditorium_number = ?', (auditorium_number,))
-        self.conn.commit()
-        if self.cursor.rowcount > 0:
-            return f"Аудитория {auditorium_number} удалена."
+    def personal_cabinet(self):
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Личный кабинет")
+        dialog.geometry("400x300")
+        dialog.configure(bg="#f0f0f0")
+        tk.Label(dialog, text=f"Привет, {self.username}", bg="#f0f0f0", font=("Arial", 14)).pack(pady=10)
+
+    def view_schedule(self):
+        schedule = self.scheduler.get_teacher_schedule(self.username)
+        if not schedule:
+            messagebox.showinfo("Расписание", "У вас нет занятий в расписании.")
         else:
-            return f"Аудитория {auditorium_number} не найдена."
+            message = "Ваше расписание:\n"
+            for entry in schedule:
+                auditorium, time, event = entry
+                message += f"Аудитория: {auditorium}, Время: {time}, Мероприятие: {event}\n"
+            messagebox.showinfo("Расписание", message)
 
-    # Бронирование аудитории
-    def book_auditorium(self, auditorium_number, time_slot, event_name):
-        self.cursor.execute('SELECT schedule FROM auditoriums WHERE auditorium_number = ?', (auditorium_number,))
-        result = self.cursor.fetchone()
+    def book_auditorium(self):
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Бронирование аудитории")
+        dialog.geometry("350x250")
+        dialog.configure(bg="#f0f0f0")
+        frame = tk.Frame(dialog, bg="#f0f0f0", padx=20, pady=20)
+        frame.pack(expand=True)
 
-        if not result:
-            return f"Аудитория {auditorium_number} не найдена."
+        # Выбор аудитории
+        tk.Label(frame, text="Номер аудитории:", bg="#f0f0f0", font=("Arial", 12)).grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+        auditorium_combobox = ttk.Combobox(frame, values=self.get_auditoriums(), font=("Arial", 12))
+        auditorium_combobox.grid(row=0, column=1, padx=5, pady=5)
 
-        schedule = json.loads(result[0]) if result[0] else []
+        # Выбор временного слота
+        tk.Label(frame, text="Временной слот:", bg="#f0f0f0", font=("Arial", 12)).grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
+        time_slots = ["9:00–10:30", "10:45–12:15", "12:30–14:00", "14:15–15:45", "16:00–17:30", "17:45–19:15"]
+        time_combobox = ttk.Combobox(frame, values=time_slots, font=("Arial", 12))
+        time_combobox.grid(row=1, column=1, padx=5, pady=5)
 
-        for slot in schedule:
-            if slot["time"] == time_slot:
-                return f"Аудитория {auditorium_number} занята в это время ({time_slot})."
+        # Название мероприятия
+        tk.Label(frame, text="Название мероприятия:", bg="#f0f0f0", font=("Arial", 12)).grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
+        event_entry = tk.Entry(frame, font=("Arial", 12))
+        event_entry.grid(row=2, column=1, padx=5, pady=5)
 
-        schedule.append({"time": time_slot, "event": event_name})
-        self.cursor.execute('UPDATE auditoriums SET schedule = ? WHERE auditorium_number = ?', 
-                            (json.dumps(schedule), auditorium_number))
-        self.conn.commit()
-        return f"Аудитория {auditorium_number} забронирована на {time_slot} для {event_name}."
+        # Кнопка подтверждения
+        tk.Button(
+            frame,
+            text="Подтвердить",
+            command=lambda: self.confirm_booking(auditorium_combobox.get(), time_combobox.get(), event_entry.get(), dialog),
+            bg="#4CAF50",
+            fg="white",
+            font=("Arial", 12)
+        ).grid(row=3, column=0, columnspan=2, pady=10, sticky=tk.EW)
 
-    # Проверка доступности аудитории
-    def check_availability(self, auditorium_number, time_slot):
-        self.cursor.execute('SELECT schedule FROM auditoriums WHERE auditorium_number = ?', (auditorium_number,))
-        result = self.cursor.fetchone()
+def confirm_booking(self, auditorium, time, event, dialog):
+    result = self.scheduler.book_auditorium(auditorium, time, event, self.username)
+    messagebox.showinfo("Результат", result)
+    dialog.destroy()
 
-        if not result:
-            return f"Аудитория {auditorium_number} не найдена."
-
-        schedule = json.loads(result[0]) if result[0] else []
-
-        for slot in schedule:
-            if slot["time"] == time_slot:
-                return f"Аудитория {auditorium_number} занята в это время ({time_slot})."
-
-        return f"Аудитория {auditorium_number} свободна в это время ({time_slot})."
-
-    # Отмена бронирования
-    def cancel_booking(self, auditorium_number, time_slot):
-        self.cursor.execute('SELECT schedule FROM auditoriums WHERE auditorium_number = ?', (auditorium_number,))
-        result = self.cursor.fetchone()
-
-        if not result:
-            return f"Аудитория {auditorium_number} не найдена."
-
-        schedule = json.loads(result[0]) if result[0] else []
-        updated_schedule = [slot for slot in schedule if slot["time"] != time_slot]
-
-        if len(updated_schedule) == len(schedule):
-            return f"Нет бронирования в аудитории {auditorium_number} на {time_slot}."
+def confirm_equipment_request(self, auditorium, equipment, dialog):
+    result = self.scheduler.request_equipment(auditorium, equipment, self.username)
+    messagebox.showinfo("Результат", result)
+    dialog.destroy()
+def manage_bookings(self):
+        bookings = self.scheduler.get_teacher_bookings(self.username)
+        if not bookings:
+            messagebox.showinfo("Бронирования", "У вас нет активных бронирований.")
         else:
-            self.cursor.execute('UPDATE auditoriums SET schedule = ? WHERE auditorium_number = ?', 
-                                (json.dumps(updated_schedule), auditorium_number))
-            self.conn.commit()
-            return f"Бронирование в аудитории {auditorium_number} на {time_slot} отменено."
+            dialog = tk.Toplevel(self.root)
+            dialog.title("Управление бронированиями")
+            dialog.geometry("500x300")
+            dialog.configure(bg="#f0f0f0")
+            frame = tk.Frame(dialog, bg="#f0f0f0", padx=20, pady=20)
+            frame.pack(expand=True)
 
-    # Назначение преподавателя
-    def assign_teacher(self, teacher, auditorium_number):
-        self.cursor.execute('SELECT * FROM auditoriums WHERE auditorium_number = ?', (auditorium_number,))
-        if not self.cursor.fetchone():
-            return f"Аудитория {auditorium_number} не найдена."
+            for booking in bookings:
+                auditorium, time, event = booking
+                tk.Label(
+                    frame,
+                    text=f"Аудитория: {auditorium}, Время: {time}, Мероприятие: {event}",
+                    bg="#f0f0f0",
+                    font=("Arial", 12)
+                ).pack(anchor=tk.W)
 
-        self.cursor.execute('DELETE FROM teacher_assignments WHERE teacher = ?', (teacher,))
-        self.cursor.execute('INSERT INTO teacher_assignments (teacher, auditorium_number) VALUES (?, ?)', 
-                            (teacher, auditorium_number))
-        self.conn.commit()
-        return f"Преподаватель {teacher} назначен в аудиторию {auditorium_number}."
+def request_equipment(self):
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Запрос оборудования")
+        dialog.geometry("350x200")
+        dialog.configure(bg="#f0f0f0")
+        frame = tk.Frame(dialog, bg="#f0f0f0", padx=20, pady=20)
+        frame.pack(expand=True)
 
-    # Получение расписания для конкретной аудитории
-    def get_auditorium_schedule(self, auditorium_number):
-        self.cursor.execute('SELECT schedule FROM auditoriums WHERE auditorium_number = ?', (auditorium_number,))
-        result = self.cursor.fetchone()
+        # Выбор аудитории
+        tk.Label(frame, text="Номер аудитории:", bg="#f0f0f0", font=("Arial", 12)).grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+        auditorium_combobox = ttk.Combobox(frame, values=self.get_auditoriums(), font=("Arial", 12))
+        auditorium_combobox.grid(row=0, column=1, padx=5, pady=5)
 
-        if not result or not result[0]:
-            return []  # Если расписание пустое
+        # Выбор оборудования
+        tk.Label(frame, text="Оборудование:", bg="#f0f0f0", font=("Arial", 12)).grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
+        equipment_combobox = ttk.Combobox(frame, values=["Проектор", "Микрофон", "Доска", "Компьютер"], font=("Arial", 12))
+        equipment_combobox.grid(row=1, column=1, padx=5, pady=5)
 
-        schedule = json.loads(result[0])
+        # Кнопка подтверждения
+        tk.Button(
+            frame,
+            text="Отправить запрос",
+            command=lambda: self.confirm_equipment_request(auditorium_combobox.get(), equipment_combobox.get(), dialog),
+            bg="#4CAF50",
+            fg="white",
+            font=("Arial", 12)
+        ).grid(row=2, column=0, columnspan=2, pady=10, sticky=tk.EW)
 
-        # Получаем назначенного преподавателя
-        teacher_name = self.get_teacher_for_auditorium(auditorium_number)
+def confirm_equipment_request(self, auditorium, equipment, dialog):
+        if not auditorium or not equipment:
+            messagebox.showerror("Ошибка", "Выберите аудиторию и оборудование.")
+            return
+        result = self.scheduler.request_equipment(auditorium, equipment, self.username)
+        messagebox.showinfo("Результат", result)
+        dialog.destroy()
 
-        # Формируем данные для вывода
-        schedule_data = []
-        for slot in schedule:
-            schedule_data.append((slot["time"], slot["event"], teacher_name))
+def generate_reports(self):
+        data = self.scheduler.generate_teacher_report(self.username)
+        messagebox.showinfo("Отчет", f"Ваш отчет:\n{data}")
 
-        return schedule_data
+def feedback_system(self):
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Обратная связь")
+        dialog.geometry("400x300")
+        dialog.configure(bg="#f0f0f0")
+        tk.Label(dialog, text="Тикет (заголовок):", bg="#f0f0f0", font=("Arial", 12)).pack(pady=5)
+        ticket_title_entry = tk.Entry(dialog, font=("Arial", 12))
+        ticket_title_entry.pack(pady=5)
+        tk.Label(dialog, text="Описание:", bg="#f0f0f0", font=("Arial", 12)).pack(pady=5)
+        ticket_description_entry = tk.Text(dialog, height=5, width=30, font=("Arial", 12))
+        ticket_description_entry.pack(pady=5)
+        tk.Button(
+            dialog,
+            text="Создать тикет",
+            command=lambda: self.create_ticket(ticket_title_entry.get(), ticket_description_entry.get("1.0", tk.END), dialog),
+            bg="#4CAF50",
+            fg="white",
+            font=("Arial", 12)
+        ).pack(pady=5)
 
-    # Получение преподавателя для аудитории
-    def get_teacher_for_auditorium(self, auditorium_number):
-        self.cursor.execute('SELECT teacher FROM teacher_assignments WHERE auditorium_number = ?', (auditorium_number,))
-        result = self.cursor.fetchone()
-        return result[0] if result else None
+def create_ticket(self, title, description, dialog):
+        result = self.scheduler.create_ticket(self.username, title, description.strip())
+        messagebox.showinfo("Тикет", result)
+        dialog.destroy()
 
+def get_auditoriums(self):
+        conn = sqlite3.connect('university.db')
+        cursor = conn.cursor()
+        cursor.execute('SELECT auditorium_number FROM auditoriums')
+        auditoriums = [row[0] for row in cursor.fetchall()]
+        conn.close()
+        return auditoriums
 
-    # Добавляем тестовых преподавателей и их предметы
-    teachers_data = [
-        ("Анна Иванова", "Математика"),
-        ("Петр Сергеев", "Физика"),
-        ("Ольга Кузнецова", "Химия"),
-        ("Игорь Петров", "История"),
-        ("Елена Михайлова", "Литература"),
-        ("Александр Андреев", "Программирование"),
-        ("Мария Дмитриева", "Экономика"),
-        ("Денис Васильев", "Биология"),
-        ("Наталья Александрова", "Психология"),
-        ("Виктория Романова", "Право"),
-        ("Сергей Игоревич", "Философия"),
-        ("Татьяна Владимировна", "География"),
-        ("Андрей Юрьевич", "Английский язык"),
-        ("Ирина Олеговна", "Французский язык"),
-        ("Дмитрий Алексеевич", "Китайский язык"),
-        ("Юлия Викторовна", "Испанский язык"),
-        ("Максим Петрович", "Статистика"),
-        ("Екатерина Сергеевна", "Маркетинг"),
-        ("Алексей Николаевич", "Робототехника"),
-        ("Владимир Анатольевич", "Электроника")
-    ]
-class AuditoriumScheduler:
-    def __init__(self):
-        self.conn = sqlite3.connect('university.db')
-        self.cursor = self.conn.cursor()
-
-    def view_auditoriums(self):
-        self.cursor.execute('SELECT * FROM auditoriums')
-        return self.cursor.fetchall()
-
-    def add_auditorium(self, auditorium_number):
-        try:
-            self.cursor.execute('INSERT INTO auditoriums (auditorium_number, schedule) VALUES (?, ?)', 
-                                (auditorium_number, '[]'))
-            self.conn.commit()
-            return f"Аудитория {auditorium_number} успешно добавлена."
-        except sqlite3.IntegrityError:
-            return f"Аудитория {auditorium_number} уже существует."
-
-
-    def delete_auditorium(self, auditorium_number):
-        self.cursor.execute('DELETE FROM auditoriums WHERE auditorium_number = ?', (auditorium_number,))
-        self.cursor.execute('DELETE FROM teacher_assignments WHERE auditorium_number = ?', (auditorium_number,))
-        self.conn.commit()
-        if self.cursor.rowcount > 0:
-            return f"Аудитория {auditorium_number} удалена."
-        else:
-            return f"Аудитория {auditorium_number} не найдена."
-
-    def book_auditorium(self, auditorium_number, time_slot, event_name):
-        self.cursor.execute('SELECT schedule FROM auditoriums WHERE auditorium_number = ?', (auditorium_number,))
-        result = self.cursor.fetchone()
-
-        if not result:
-            return f"Аудитория {auditorium_number} не найдена."
-
-        schedule = json.loads(result[0]) if result[0] else []
-
-        for slot in schedule:
-            if slot["time"] == time_slot:
-                return f"Аудитория {auditorium_number} занята в это время ({time_slot})."
-
-        schedule.append({"time": time_slot, "event": event_name})
-        self.cursor.execute('UPDATE auditoriums SET schedule = ? WHERE auditorium_number = ?', 
-                            (json.dumps(schedule), auditorium_number))
-        self.conn.commit()
-        return f"Аудитория {auditorium_number} забронирована на {time_slot} для {event_name}."
-
-    def check_availability(self, auditorium_number, time_slot):
-        self.cursor.execute('SELECT schedule FROM auditoriums WHERE auditorium_number = ?', (auditorium_number,))
-        result = self.cursor.fetchone()
-
-        if not result:
-            return f"Аудитория {auditorium_number} не найдена."
-
-        schedule = json.loads(result[0]) if result[0] else []
-
-        for slot in schedule:
-            if slot["time"] == time_slot:
-                return f"Аудитория {auditorium_number} занята в это время ({time_slot})."
-
-        return f"Аудитория {auditorium_number} свободна в это время ({time_slot})."
-
-    def cancel_booking(self, auditorium_number, time_slot):
-        self.cursor.execute('SELECT schedule FROM auditoriums WHERE auditorium_number = ?', (auditorium_number,))
-        result = self.cursor.fetchone()
-
-        if not result:
-            return f"Аудитория {auditorium_number} не найдена."
-
-        schedule = json.loads(result[0]) if result[0] else []
-        updated_schedule = [slot for slot in schedule if slot["time"] != time_slot]
-
-        if len(updated_schedule) == len(schedule):
-            return f"Нет бронирования в аудитории {auditorium_number} на {time_slot}."
-        else:
-            self.cursor.execute('UPDATE auditoriums SET schedule = ? WHERE auditorium_number = ?', 
-                                (json.dumps(updated_schedule), auditorium_number))
-            self.conn.commit()
-            return f"Бронирование в аудитории {auditorium_number} на {time_slot} отменено."
-
-    def assign_teacher(self, teacher, auditorium_number):
-        self.cursor.execute('SELECT * FROM auditoriums WHERE auditorium_number = ?', (auditorium_number,))
-        if not self.cursor.fetchone():
-            return f"Аудитория {auditorium_number} не найдена."
-
-        self.cursor.execute('DELETE FROM teacher_assignments WHERE teacher = ?', (teacher,))
-        self.cursor.execute('INSERT INTO teacher_assignments (teacher, auditorium_number) VALUES (?, ?)', 
-                            (teacher, auditorium_number))
-        self.conn.commit()
-        return f"Преподаватель {teacher} назначен в аудиторию {auditorium_number}."
-
-    def get_auditoriums(self):
-        self.cursor.execute('SELECT auditoriu   m_number FROM auditoriums')
-        return [row[0] for row in self.cursor.fetchall()]
-
-    def get_teachers(self):
-        self.cursor.execute('SELECT teacher_name FROM teachers')
-        return [row[0] for row in self.cursor.fetchall()]
-    
-def get_teacher_bookings(self, teacher_name):
-    """Получение всех бронирований преподавателя"""
-    conn = sqlite3.connect('university.db')
-    cursor = conn.cursor()
-    cursor.execute('SELECT auditorium_number, time, event FROM bookings WHERE teacher = ?', (teacher_name,))
-    bookings = cursor.fetchall()
-    conn.close()
-    return bookings
-
-def get_teacher_bookings(self, teacher_name):
-    """Получение всех бронирований преподавателя"""
-    conn = sqlite3.connect('university.db')
-    cursor = conn.cursor()
-    cursor.execute('SELECT auditorium_number, time, event FROM bookings WHERE teacher = ?', (teacher_name,))
-    bookings = cursor.fetchall()
-    conn.close()
-    return bookings
-
-def request_equipment(self, auditorium, equipment, teacher_name):
-    """Запрос оборудования для аудитории"""
-    conn = sqlite3.connect('university.db')
-    cursor = conn.cursor()
-    cursor.execute('INSERT INTO equipment_requests (auditorium_number, equipment, teacher) VALUES (?, ?, ?)', (auditorium, equipment, teacher_name))
-    conn.commit()
-    conn.close()
-    return "Запрос на оборудование отправлен."
+def logout(self):
+        self.root.destroy()
+        from main import start_login
+        start_login()

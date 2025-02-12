@@ -1,260 +1,185 @@
-# admin_app.py
 import tkinter as tk
 from tkinter import messagebox
 from tkinter import ttk  # Для Combobox
 import sqlite3
 import csv  # Для работы с CSV
 import shutil  # Для резервного копирования
-import json  
+import json
 from database import AuditoriumScheduler
+
+
 
 class AdminApp:
     def __init__(self, root, username):
         self.root = root
         self.root.title(f"Админ-панель | {username}")
-        self.root.geometry("800x600")
+        self.root.geometry("1000x600")
         self.root.configure(bg="#f0f0f0")
-
         self.scheduler = AuditoriumScheduler()  # Инициализация планировщика аудиторий
         self.username = username  # Сохраняем имя пользователя
 
+        # Стиль кнопок
+        style = ttk.Style()
+        style.configure("TButton", font=("Arial", 12), padding=10)
+        style.map(
+            "TButton",
+            foreground=[("active", "#FFFFFF")],
+            background=[("active", "#45A049")],
+        )
+
         # Заголовок
+        header_frame = tk.Frame(self.root, bg="#4CAF50", height=50)
+        header_frame.pack(fill="x")
         tk.Label(
-            self.root,
+            header_frame,
             text=f"Добро пожаловать, {username} (Админ)!",
+            bg="#4CAF50",
+            fg="white",
+            font=("Arial", 14),
+        ).pack(side="left", padx=10, pady=10)
+
+        # Логотип или название приложения
+        tk.Label(
+            header_frame,
+            text="Университетский Портал",
+            bg="#4CAF50",
+            fg="white",
+            font=("Arial", 14, "bold"),
+        ).pack(side="right", padx=10, pady=10)
+
+        # Боковое меню
+        sidebar_frame = tk.Frame(self.root, bg="#ECECEC", width=200)
+        sidebar_frame.pack(side="left", fill="y")
+
+        # Кнопки в боковом меню
+        buttons = [
+            ("Управление аудиториями", self.manage_auditoriums),
+            ("Расписание занятий", self.schedule_management),
+            ("Бронирование аудиторий", self.booking_management),
+            ("Учет занятости", self.occupancy_report),
+            ("Отчеты и аналитика", self.generate_reports),
+            ("Управление пользователями", self.user_management),
+            ("Уведомления", self.notifications),
+            ("Поиск и фильтрация", self.search_and_filter),
+            ("Резервное копирование", self.backup_db),
+            ("Обратная связь", self.feedback_system),
+            ("Автоматизация уборки", self.cleaning_schedule),
+            ("Контроль доступа", self.access_control),
+            ("Выход", self.logout),
+        ]
+
+        for i, (text, command) in enumerate(buttons):
+            button = ttk.Button(
+                sidebar_frame,
+                text=text,
+                command=lambda cmd=command: self.show_content(cmd),
+                style="TButton",
+                width=20,
+            )
+            button.pack(pady=5, padx=10, fill="x")
+
+        # Главная область для контента
+        self.content_frame = tk.Frame(self.root, bg="#f0f0f0")
+        self.content_frame.pack(side="right", expand=True, fill="both")
+
+        # Приветственное сообщение
+        self.welcome_label = tk.Label(
+            self.content_frame,
+            text="Выберите действие слева.",
             bg="#f0f0f0",
-            font=("Arial", 14)
-        ).pack(pady=10)
+            font=("Arial", 14),
+        )
+        self.welcome_label.pack(pady=50)
 
-        # Кнопки управления
-        buttons_frame = tk.Frame(self.root, bg="#f0f0f0")
-        buttons_frame.pack(pady=5)
+    def show_content(self, content_function):
+        """Очищает текущее содержимое и показывает новое."""
+        for widget in self.content_frame.winfo_children():
+            widget.destroy()
 
-        tk.Button(
-            buttons_frame,
-            text="Управление аудиториями",
-            command=self.manage_auditoriums,
-            bg="#4CAF50",
-            fg="white",
-            font=("Arial", 12)
-        ).pack(fill=tk.X, pady=5)
-
-        tk.Button(
-            buttons_frame,
-            text="Расписание занятий",
-            command=self.schedule_management,
-            bg="#4CAF50",
-            fg="white",
-            font=("Arial", 12)
-        ).pack(fill=tk.X, pady=5)
-
-        tk.Button(
-            buttons_frame,
-            text="Бронирование аудиторий",
-            command=self.booking_management,
-            bg="#4CAF50",
-            fg="white",
-            font=("Arial", 12)
-        ).pack(fill=tk.X, pady=5)
-
-        tk.Button(
-            buttons_frame,
-            text="Учет занятости",
-            command=self.occupancy_report,
-            bg="#4CAF50",
-            fg="white",
-            font=("Arial", 12)
-        ).pack(fill=tk.X, pady=5)
-
-        tk.Button(
-            buttons_frame,
-            text="Отчеты и аналитика",
-            command=self.generate_reports,
-            bg="#4CAF50",
-            fg="white",
-            font=("Arial", 12)
-        ).pack(fill=tk.X, pady=5)
-
-        tk.Button(
-            buttons_frame,
-            text="Управление пользователями",
-            command=self.user_management,
-            bg="#4CAF50",
-            fg="white",
-            font=("Arial", 12)
-        ).pack(fill=tk.X, pady=5)
-
-        tk.Button(
-            buttons_frame,
-            text="Уведомления",
-            command=self.notifications,
-            bg="#4CAF50",
-            fg="white",
-            font=("Arial", 12)
-        ).pack(fill=tk.X, pady=5)
-
-        tk.Button(
-            buttons_frame,
-            text="Поиск и фильтрация",
-            command=self.search_and_filter,
-            bg="#4CAF50",
-            fg="white",
-            font=("Arial", 12)
-        ).pack(fill=tk.X, pady=5)
-
-        tk.Button(
-            buttons_frame,
-            text="Резервное копирование",
-            command=self.backup_db,
-            bg="#4CAF50",
-            fg="white",
-            font=("Arial", 12)
-        ).pack(fill=tk.X, pady=5)
-
-        tk.Button(
-            buttons_frame,
-            text="Обратная связь",
-            command=self.feedback_system,
-            bg="#4CAF50",
-            fg="white",
-            font=("Arial", 12)
-        ).pack(fill=tk.X, pady=5)
-
-        tk.Button(
-            buttons_frame,
-            text="Автоматизация уборки",
-            command=self.cleaning_schedule,
-            bg="#4CAF50",
-            fg="white",
-            font=("Arial", 12)
-        ).pack(fill=tk.X, pady=5)
-
-        tk.Button(
-            buttons_frame,
-            text="Контроль доступа",
-            command=self.access_control,
-            bg="#4CAF50",
-            fg="white",
-            font=("Arial", 12)
-        ).pack(fill=tk.X, pady=5)
-
-        tk.Button(
-            buttons_frame,
-            text="Выйти",
-            command=self.logout,
-            bg="#FF5722",
-            fg="white",
-            font=("Arial", 12)
-        ).pack(fill=tk.X, pady=5)
+        content_function()
 
     # Управление аудиториями
     def manage_auditoriums(self):
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Управление аудиториями")
-        dialog.geometry("400x300")
-        dialog.configure(bg="#f0f0f0")
+        self.add_form_fields(["Номер аудитории", "Вместимость", "Оборудование", "Тип аудитории"])
 
-        tk.Label(dialog, text="Номер аудитории:", bg="#f0f0f0").grid(row=0, column=0, padx=5, pady=5)
-        auditorium_entry = tk.Entry(dialog)
-        auditorium_entry.grid(row=0, column=1, padx=5, pady=5)
-
-        tk.Label(dialog, text="Вместимость:", bg="#f0f0f0").grid(row=1, column=0, padx=5, pady=5)
-        capacity_entry = tk.Entry(dialog)
-        capacity_entry.grid(row=1, column=1, padx=5, pady=5)
-
-        tk.Label(dialog, text="Оборудование:", bg="#f0f0f0").grid(row=2, column=0, padx=5, pady=5)
-        equipment_entry = tk.Entry(dialog)
-        equipment_entry.grid(row=2, column=1, padx=5, pady=5)
-
-        tk.Label(dialog, text="Тип аудитории:", bg="#f0f0f0").grid(row=3, column=0, padx=5, pady=5)
-        type_entry = tk.Entry(dialog)
-        type_entry.grid(row=3, column=1, padx=5, pady=5)
-
-        tk.Button(
-            dialog,
+        confirm_button = ttk.Button(
+            self.content_frame,
             text="Добавить аудиторию",
-            command=lambda: self.confirm_add_auditorium(
-                auditorium_entry.get(),
-                capacity_entry.get(),
-                equipment_entry.get(),
-                type_entry.get(),
-                dialog
-            ),
-            bg="#4CAF50",
-            fg="white"
-        ).grid(row=4, column=0, columnspan=2, pady=5)
+            command=self.confirm_add_auditorium,
+        )
+        confirm_button.grid(row=4, column=0, columnspan=2, pady=10)
 
-        tk.Button(
-            dialog,
+        edit_button = ttk.Button(
+            self.content_frame,
             text="Редактировать аудиторию",
-            command=lambda: self.confirm_edit_auditorium(
-                auditorium_entry.get(),
-                capacity_entry.get(),
-                equipment_entry.get(),
-                type_entry.get(),
-                dialog
-            ),
-            bg="#4CAF50",
-            fg="white"
-        ).grid(row=5, column=0, columnspan=2, pady=5)
+            command=self.confirm_edit_auditorium,
+        )
+        edit_button.grid(row=5, column=0, columnspan=2, pady=5)
 
-        tk.Button(
-            dialog,
+        mark_unavailable_button = ttk.Button(
+            self.content_frame,
             text="Пометить как недоступную",
-            command=lambda: self.mark_auditorium_unavailable(auditorium_entry.get(), dialog),
-            bg="#FF9800",
-            fg="white"
-        ).grid(row=6, column=0, columnspan=2, pady=5)
+            command=self.mark_auditorium_unavailable,
+            style="Warning.TButton",
+        )
+        mark_unavailable_button.grid(row=6, column=0, columnspan=2, pady=5)
 
-    def confirm_add_auditorium(self, auditorium_number, capacity, equipment, auditorium_type, dialog):
-        result = self.scheduler.add_auditorium(auditorium_number, capacity, equipment, auditorium_type)
+    def confirm_add_auditorium(self):
+        fields = self.get_form_fields()
+        if not all(fields.values()):
+            messagebox.showerror("Ошибка", "Все поля должны быть заполнены.")
+            return
+        result = self.scheduler.add_auditorium(
+            fields["Номер аудитории"], fields["Вместимость"], fields["Оборудование"], fields["Тип аудитории"]
+        )
         messagebox.showinfo("Результат", result)
-        dialog.destroy()
 
-    def confirm_edit_auditorium(self, auditorium_number, capacity, equipment, auditorium_type, dialog):
-        result = self.scheduler.edit_auditorium(auditorium_number, capacity, equipment, auditorium_type)
+    def confirm_edit_auditorium(self):
+        fields = self.get_form_fields()
+        if not all(fields.values()):
+            messagebox.showerror("Ошибка", "Все поля должны быть заполнены.")
+            return
+        result = self.scheduler.edit_auditorium(
+            fields["Номер аудитории"], fields["Вместимость"], fields["Оборудование"], fields["Тип аудитории"]
+        )
         messagebox.showinfo("Результат", result)
-        dialog.destroy()
 
-    def mark_auditorium_unavailable(self, auditorium_number, dialog):
-        reason = "На ремонте"
-        result = self.scheduler.mark_auditorium_unavailable(auditorium_number, reason)
+    def mark_auditorium_unavailable(self):
+        auditorium_number = self.get_form_field_value("Номер аудитории")
+        if not auditorium_number:
+            messagebox.showerror("Ошибка", "Введите номер аудитории.")
+            return
+        result = self.scheduler.mark_auditorium_unavailable(auditorium_number, "На ремонте")
         messagebox.showinfo("Результат", result)
-        dialog.destroy()
 
     # Расписание занятий
     def schedule_management(self):
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Расписание занятий")
-        dialog.geometry("400x300")
-        dialog.configure(bg="#f0f0f0")
+        self.add_form_fields(["Загрузить расписание из CSV:"], rows=1)
 
-        tk.Label(dialog, text="Загрузить расписание из CSV:", bg="#f0f0f0").pack(pady=5)
-        tk.Button(
-            dialog,
+        load_button = ttk.Button(
+            self.content_frame,
             text="Загрузить",
             command=lambda: self.load_schedule_from_csv("schedule.csv"),
-            bg="#4CAF50",
-            fg="white"
-        ).pack(pady=5)
+        )
+        load_button.grid(row=1, column=0, columnspan=2, pady=10)
 
-        tk.Label(dialog, text="Проверка пересечений:", bg="#f0f0f0").pack(pady=5)
-        tk.Button(
-            dialog,
-            text="Проверить",
+        check_conflicts_button = ttk.Button(
+            self.content_frame,
+            text="Проверить пересечения",
             command=self.check_schedule_conflicts,
-            bg="#4CAF50",
-            fg="white"
-        ).pack(pady=5)
+        )
+        check_conflicts_button.grid(row=2, column=0, columnspan=2, pady=5)
 
     def load_schedule_from_csv(self, file_path):
         try:
-            with open(file_path, 'r', encoding='utf-8') as file:
+            with open(file_path, "r", encoding="utf-8") as file:
                 reader = csv.DictReader(file)
                 for row in reader:
-                    result = self.scheduler.book_auditorium(row['auditorium_number'], row['time_slot'], row['event_name'])
+                    result = self.scheduler.book_auditorium(
+                        row["auditorium_number"], row["time_slot"], row["event_name"]
+                    )
                     if "занята" in result:
-                        print(f"Конфликт: {result}")
+                        messagebox.showwarning("Конфликт", f"Конфликт: {result}")
             messagebox.showinfo("Успех", "Расписание успешно загружено.")
         except Exception as e:
             messagebox.showerror("Ошибка", f"Не удалось загрузить файл: {str(e)}")
@@ -269,187 +194,140 @@ class AdminApp:
             if len(times) != len(set(times)):
                 conflicts.append(auditorium_number)
         if conflicts:
-            messagebox.showwarning("Конфликты", f"Обнаружены конфликты в следующих аудиториях: {', '.join(conflicts)}.")
+            messagebox.showwarning(
+                "Конфликты", f"Обнаружены конфликты в следующих аудиториях: {', '.join(conflicts)}."
+            )
         else:
             messagebox.showinfo("Конфликты", "Конфликтов не обнаружено.")
 
     # Бронирование аудиторий
     def booking_management(self):
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Бронирование аудиторий")
-        dialog.geometry("400x300")
-        dialog.configure(bg="#f0f0f0")
-
-        tk.Label(dialog, text="Номер аудитории:", bg="#f0f0f0").grid(row=0, column=0, padx=5, pady=5)
-        auditorium_combobox = ttk.Combobox(dialog, values=self.get_auditoriums())
-        auditorium_combobox.grid(row=0, column=1, padx=5, pady=5)
-
-        tk.Label(dialog, text="Временной слот:", bg="#f0f0f0").grid(row=1, column=0, padx=5, pady=5)
+        self.add_form_fields(["Номер аудитории", "Временной слот", "Название мероприятия"], rows=3)
         time_slots = ["9:00–10:30", "10:45–12:15", "12:30–14:00", "14:15–15:45", "16:00–17:30", "17:45–19:15"]
-        time_combobox = ttk.Combobox(dialog, values=time_slots)
-        time_combobox.grid(row=1, column=1, padx=5, pady=5)
+        self.set_combobox_values("Временной слот", time_slots)
 
-        tk.Label(dialog, text="Название мероприятия:", bg="#f0f0f0").grid(row=2, column=0, padx=5, pady=5)
-        event_entry = tk.Entry(dialog)
-        event_entry.grid(row=2, column=1, padx=5, pady=5)
-
-        tk.Button(
-            dialog,
+        confirm_button = ttk.Button(
+            self.content_frame,
             text="Забронировать",
-            command=lambda: self.confirm_booking(
-                auditorium_combobox.get(),
-                time_combobox.get(),
-                event_entry.get(),
-                dialog
-            ),
-            bg="#4CAF50",
-            fg="white"
-        ).grid(row=3, column=0, columnspan=2, pady=5)
+            command=self.confirm_booking,
+        )
+        confirm_button.grid(row=3, column=0, columnspan=2, pady=10)
 
-    def confirm_booking(self, auditorium, time, event, dialog):
-        result = self.scheduler.book_auditorium(auditorium, time, event)
+    def confirm_booking(self):
+        fields = self.get_form_fields()
+        if not all(fields.values()):
+            messagebox.showerror("Ошибка", "Все поля должны быть заполнены.")
+            return
+        result = self.scheduler.book_auditorium(
+            fields["Номер аудитории"], fields["Временной слот"], fields["Название мероприятия"]
+        )
         messagebox.showinfo("Результат", result)
-        dialog.destroy()
 
     # Учет занятости
     def occupancy_report(self):
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Учет занятости")
-        dialog.geometry("400x300")
-        dialog.configure(bg="#f0f0f0")
+        self.add_form_fields(["Дата", "Временной слот"], rows=2)
+        time_slots = ["9:00–10:30", "10:45–12:15", "12:30–14:00", "14:15–15:45", "16:00–17:30", "17:45–19:15"]
+        self.set_combobox_values("Временной слот", time_slots)
 
-        tk.Label(dialog, text="Дата:", bg="#f0f0f0").pack(pady=5)
-        date_entry = tk.Entry(dialog)
-        date_entry.pack(pady=5)
-
-        tk.Label(dialog, text="Временной слот:", bg="#f0f0f0").pack(pady=5)
-        time_combobox = ttk.Combobox(dialog, values=["9:00–10:30", "10:45–12:15", "12:30–14:00", "14:15–15:45", "16:00–17:30", "17:45–19:15"])
-        time_combobox.pack(pady=5)
-
-        tk.Button(
-            dialog,
+        confirm_button = ttk.Button(
+            self.content_frame,
             text="Просмотреть",
-            command=lambda: self.view_occupancy(date_entry.get(), time_combobox.get(), dialog),
-            bg="#4CAF50",
-            fg="white"
-        ).pack(pady=5)
+            command=self.view_occupancy,
+        )
+        confirm_button.grid(row=2, column=0, columnspan=2, pady=10)
 
-    def view_occupancy(self, date, time, dialog):
+    def view_occupancy(self):
+        date = self.get_form_field_value("Дата")
+        time = self.get_form_field_value("Временной слот")
+        if not all([date, time]):
+            messagebox.showerror("Ошибка", "Введите дату и временной слот.")
+            return
         result = self.scheduler.get_auditorium_occupancy(date, time)
         messagebox.showinfo("Занятость аудиторий", result)
-        dialog.destroy()
 
     # Отчеты и аналитика
     def generate_reports(self):
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Генерация отчетов")
-        dialog.geometry("400x200")
-        dialog.configure(bg="#f0f0f0")
+        self.add_form_fields(["Период (YYYY-MM-DD):"], rows=1)
 
-        tk.Label(dialog, text="Период (YYYY-MM-DD):", bg="#f0f0f0").pack(pady=5)
-        period_entry = tk.Entry(dialog)
-        period_entry.pack(pady=5)
-
-        tk.Button(
-            dialog,
+        confirm_button = ttk.Button(
+            self.content_frame,
             text="Сгенерировать",
-            command=lambda: self.generate_usage_report(period_entry.get()),
-            bg="#4CAF50",
-            fg="white"
-        ).pack(pady=5)
+            command=self.generate_usage_report,
+        )
+        confirm_button.grid(row=1, column=0, columnspan=2, pady=10)
 
-    def generate_usage_report(self, period):
+    def generate_usage_report(self):
+        period = self.get_form_field_value("Период (YYYY-MM-DD):")
+        if not period:
+            messagebox.showerror("Ошибка", "Введите период.")
+            return
         data = self.scheduler.generate_report(period)
         self.scheduler.generate_pdf_report(data, "usage_report.pdf")
         messagebox.showinfo("Отчет", "Отчет успешно сгенерирован и сохранен как usage_report.pdf.")
 
     # Управление пользователями
     def user_management(self):
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Управление пользователями")
-        dialog.geometry("400x300")
-        dialog.configure(bg="#f0f0f0")
+        self.add_form_fields(
+            ["Логин пользователя", "Новая роль (admin/teacher/student)"], rows=2
+        )
+        roles = ["admin", "teacher", "student"]
+        self.set_combobox_values("Новая роль (admin/teacher/student)", roles)
 
-        tk.Label(dialog, text="Логин пользователя:", bg="#f0f0f0").grid(row=0, column=0, padx=5, pady=5)
-        username_entry = tk.Entry(dialog)
-        username_entry.grid(row=0, column=1, padx=5, pady=5)
-
-        tk.Label(dialog, text="Новая роль (admin/teacher/student):", bg="#f0f0f0").grid(row=1, column=0, padx=5, pady=5)
-        role_combobox = ttk.Combobox(dialog, values=["admin", "teacher", "student"])
-        role_combobox.grid(row=1, column=1, padx=5, pady=5)
-
-        tk.Button(
-            dialog,
+        confirm_button = ttk.Button(
+            self.content_frame,
             text="Изменить роль",
-            command=lambda: self.change_user_role(username_entry.get(), role_combobox.get(), dialog),
-            bg="#4CAF50",
-            fg="white"
-        ).grid(row=2, column=0, columnspan=2, pady=5)
+            command=self.change_user_role,
+        )
+        confirm_button.grid(row=2, column=0, columnspan=2, pady=10)
 
-    def change_user_role(self, username, role, dialog):
+    def change_user_role(self):
+        username = self.get_form_field_value("Логин пользователя")
+        role = self.get_form_field_value("Новая роль (admin/teacher/student)")
+        if not all([username, role]):
+            messagebox.showerror("Ошибка", "Заполните все поля.")
+            return
         result = self.scheduler.manage_users(username, role)
         messagebox.showinfo("Результат", result)
-        dialog.destroy()
 
     # Уведомления
     def notifications(self):
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Уведомления")
-        dialog.geometry("400x200")
-        dialog.configure(bg="#f0f0f0")
+        self.add_form_fields(["Логин получателя", "Сообщение"], rows=2)
 
-        tk.Label(dialog, text="Логин получателя:", bg="#f0f0f0").grid(row=0, column=0, padx=5, pady=5)
-        recipient_entry = tk.Entry(dialog)
-        recipient_entry.grid(row=0, column=1, padx=5, pady=5)
-
-        tk.Label(dialog, text="Сообщение:", bg="#f0f0f0").grid(row=1, column=0, padx=5, pady=5)
-        message_entry = tk.Entry(dialog)
-        message_entry.grid(row=1, column=1, padx=5, pady=5)
-
-        tk.Button(
-            dialog,
+        confirm_button = ttk.Button(
+            self.content_frame,
             text="Отправить уведомление",
-            command=lambda: self.send_notification(recipient_entry.get(), message_entry.get(), dialog),
-            bg="#4CAF50",
-            fg="white"
-        ).grid(row=2, column=0, columnspan=2, pady=5)
+            command=self.send_notification,
+        )
+        confirm_button.grid(row=2, column=0, columnspan=2, pady=10)
 
-    def send_notification(self, recipient, message, dialog):
+    def send_notification(self):
+        recipient = self.get_form_field_value("Логин получателя")
+        message = self.get_form_field_value("Сообщение")
+        if not all([recipient, message]):
+            messagebox.showerror("Ошибка", "Заполните все поля.")
+            return
         result = self.scheduler.send_email_notification(recipient, "Уведомление от администратора", message)
         messagebox.showinfo("Результат", result)
-        dialog.destroy()
 
     # Поиск и фильтрация
     def search_and_filter(self):
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Поиск и фильтрация")
-        dialog.geometry("400x300")
-        dialog.configure(bg="#f0f0f0")
+        self.add_form_fields(["Вместимость ≥ ", "Оборудование"], rows=2)
 
-        tk.Label(dialog, text="Вместимость ≥ :", bg="#f0f0f0").grid(row=0, column=0, padx=5, pady=5)
-        capacity_entry = tk.Entry(dialog)
-        capacity_entry.grid(row=0, column=1, padx=5, pady=5)
-
-        tk.Label(dialog, text="Оборудование:", bg="#f0f0f0").grid(row=1, column=0, padx=5, pady=5)
-        equipment_entry = tk.Entry(dialog)
-        equipment_entry.grid(row=1, column=1, padx=5, pady=5)
-
-        tk.Button(
-            dialog,
+        confirm_button = ttk.Button(
+            self.content_frame,
             text="Найти",
-            command=lambda: self.search_auditoriums(
-                capacity_entry.get(),
-                equipment_entry.get(),
-                dialog
-            ),
-            bg="#4CAF50",
-            fg="white"
-        ).grid(row=2, column=0, columnspan=2, pady=5)
+            command=self.search_auditoriums,
+        )
+        confirm_button.grid(row=2, column=0, columnspan=2, pady=10)
 
-    def search_auditoriums(self, capacity, equipment, dialog):
+    def search_auditoriums(self):
+        capacity = self.get_form_field_value("Вместимость ≥ ")
+        equipment = self.get_form_field_value("Оборудование")
+        if not any([capacity, equipment]):
+            messagebox.showerror("Ошибка", "Заполните хотя бы одно поле для поиска.")
+            return
         result = self.scheduler.search_auditoriums(capacity, equipment)
         messagebox.showinfo("Результат поиска", result)
-        dialog.destroy()
 
     # Резервное копирование
     def backup_db(self):
@@ -458,99 +336,107 @@ class AdminApp:
 
     # Обратная связь
     def feedback_system(self):
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Обратная связь")
-        dialog.geometry("400x300")
-        dialog.configure(bg="#f0f0f0")
+        self.add_form_fields(["Тикет (заголовок)", "Описание"], rows=2)
+        self.form_fields["Описание"] = tk.Text(self.content_frame, height=5, width=30)
+        self.form_fields["Описание"].grid(row=1, column=1, padx=5, pady=5)
 
-        tk.Label(dialog, text="Тикет (заголовок):", bg="#f0f0f0").pack(pady=5)
-        ticket_title_entry = tk.Entry(dialog)
-        ticket_title_entry.pack(pady=5)
-
-        tk.Label(dialog, text="Описание:", bg="#f0f0f0").pack(pady=5)
-        ticket_description_entry = tk.Text(dialog, height=5, width=30)
-        ticket_description_entry.pack(pady=5)
-
-        tk.Button(
-            dialog,
+        confirm_button = ttk.Button(
+            self.content_frame,
             text="Создать тикет",
-            command=lambda: self.create_ticket(
-                ticket_title_entry.get(),
-                ticket_description_entry.get("1.0", tk.END),
-                dialog
-            ),
-            bg="#4CAF50",
-            fg="white"
-        ).pack(pady=5)
+            command=self.create_ticket,
+        )
+        confirm_button.grid(row=2, column=0, columnspan=2, pady=10)
 
-    def create_ticket(self, title, description, dialog):
-        result = self.scheduler.create_ticket(self.username, title, description.strip())
+    def create_ticket(self):
+        title = self.get_form_field_value("Тикет (заголовок)")
+        description = self.form_fields["Описание"].get("1.0", tk.END).strip()
+        if not all([title, description]):
+            messagebox.showerror("Ошибка", "Заполните все поля.")
+            return
+        result = self.scheduler.create_ticket(self.username, title, description)
         messagebox.showinfo("Тикет", result)
-        dialog.destroy()
 
     # Автоматизация уборки
     def cleaning_schedule(self):
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Планирование уборки")
-        dialog.geometry("400x200")
-        dialog.configure(bg="#f0f0f0")
+        self.add_form_fields(["Номер аудитории", "Дата уборки (YYYY-MM-DD)"], rows=2)
+        self.set_combobox_values("Номер аудитории", self.get_auditoriums())
 
-        tk.Label(dialog, text="Номер аудитории:", bg="#f0f0f0").grid(row=0, column=0, padx=5, pady=5)
-        auditorium_combobox = ttk.Combobox(dialog, values=self.get_auditoriums())
-        auditorium_combobox.grid(row=0, column=1, padx=5, pady=5)
-
-        tk.Label(dialog, text="Дата уборки (YYYY-MM-DD):", bg="#f0f0f0").grid(row=1, column=0, padx=5, pady=5)
-        date_entry = tk.Entry(dialog)
-        date_entry.grid(row=1, column=1, padx=5, pady=5)
-
-        tk.Button(
-            dialog,
+        confirm_button = ttk.Button(
+            self.content_frame,
             text="Запланировать уборку",
-            command=lambda: self.schedule_cleaning(auditorium_combobox.get(), date_entry.get(), dialog),
-            bg="#4CAF50",
-            fg="white"
-        ).grid(row=2, column=0, columnspan=2, pady=5)
+            command=self.schedule_cleaning,
+        )
+        confirm_button.grid(row=2, column=0, columnspan=2, pady=10)
 
-    def schedule_cleaning(self, auditorium_number, date, dialog):
+    def schedule_cleaning(self):
+        auditorium_number = self.get_form_field_value("Номер аудитории")
+        date = self.get_form_field_value("Дата уборки (YYYY-MM-DD)")
+        if not all([auditorium_number, date]):
+            messagebox.showerror("Ошибка", "Заполните все поля.")
+            return
         result = self.scheduler.schedule_cleaning(auditorium_number, date)
         messagebox.showinfo("Результат", result)
-        dialog.destroy()
 
     # Контроль доступа
     def access_control(self):
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Контроль доступа")
-        dialog.geometry("400x200")
-        dialog.configure(bg="#f0f0f0")
+        self.add_form_fields(["Номер аудитории", "Пользователь"], rows=2)
+        self.set_combobox_values("Номер аудитории", self.get_auditoriums())
 
-        tk.Label(dialog, text="Номер аудитории:", bg="#f0f0f0").grid(row=0, column=0, padx=5, pady=5)
-        auditorium_combobox = ttk.Combobox(dialog, values=self.get_auditoriums())
-        auditorium_combobox.grid(row=0, column=1, padx=5, pady=5)
-
-        tk.Label(dialog, text="Пользователь:", bg="#f0f0f0").grid(row=1, column=0, padx=5, pady=5)
-        user_entry = tk.Entry(dialog)
-        user_entry.grid(row=1, column=1, padx=5, pady=5)
-
-        tk.Button(
-            dialog,
+        confirm_button = ttk.Button(
+            self.content_frame,
             text="Зарегистрировать вход",
-            command=lambda: self.log_access(
-                auditorium_combobox.get(),
-                user_entry.get(),
-                "entry",
-                dialog
-            ),
-            bg="#4CAF50",
-            fg="white"
-        ).grid(row=2, column=0, columnspan=2, pady=5)
+            command=self.log_access,
+        )
+        confirm_button.grid(row=2, column=0, columnspan=2, pady=10)
 
-    def log_access(self, auditorium_number, user, action, dialog):
-        result = self.scheduler.log_access(auditorium_number, user, action)
+    def log_access(self):
+        auditorium_number = self.get_form_field_value("Номер аудитории")
+        user = self.get_form_field_value("Пользователь")
+        if not all([auditorium_number, user]):
+            messagebox.showerror("Ошибка", "Заполните все поля.")
+            return
+        result = self.scheduler.log_access(auditorium_number, user, "entry")
         messagebox.showinfo("Результат", result)
-        dialog.destroy()
 
     # Выход из аккаунта
     def logout(self):
         self.root.destroy()
         from main import start_login
         start_login()
+
+    # Вспомогательные методы
+    def add_form_fields(self, labels, rows=None):
+        """Добавляет поля ввода в правую часть интерфейса."""
+        self.form_fields = {}
+        for i, label_text in enumerate(labels):
+            tk.Label(
+                self.content_frame, text=label_text, bg="#f0f0f0", font=("Arial", 12)
+            ).grid(row=i, column=0, padx=5, pady=5)
+            entry = tk.Entry(self.content_frame, font=("Arial", 12))
+            entry.grid(row=i, column=1, padx=5, pady=5)
+            self.form_fields[label_text] = entry
+
+        if rows is not None:
+            self.content_frame.grid_rowconfigure(rows, weight=1)
+
+    def set_combobox_values(self, label, values):
+        """Устанавливает значения для Combobox."""
+        row = len(self.form_fields)
+        tk.Label(
+            self.content_frame, text=label, bg="#f0f0f0", font=("Arial", 12)
+        ).grid(row=row, column=0, padx=5, pady=5)
+        combobox = ttk.Combobox(self.content_frame, values=values, font=("Arial", 12))
+        combobox.grid(row=row, column=1, padx=5, pady=5)
+        self.form_fields[label] = combobox
+
+    def get_form_fields(self):
+        """Получает значения всех полей формы."""
+        return {label: field.get() for label, field in self.form_fields.items()}
+
+    def get_form_field_value(self, label):
+        """Получает значение конкретного поля формы."""
+        return self.form_fields.get(label, tk.Entry()).get()
+
+    def get_auditoriums(self):
+        """Получает список всех аудиторий."""
+        return [row[0] for row in self.scheduler.view_auditoriums()]
